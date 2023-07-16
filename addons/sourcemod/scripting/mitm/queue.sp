@@ -34,7 +34,7 @@ ArrayList Queue_GetDefenderQueue()
 		if (!IsClientInGame(client))
 			continue;
 		
-		if (IsClientSourceTV(client))
+		if (IsFakeClient(client))
 			continue;
 		
 		if (TF2_GetClientTeam(client) == TFTeam_Unassigned)

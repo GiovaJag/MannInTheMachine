@@ -364,9 +364,10 @@ static void Timer_OnWaitingForPlayersEnd(Handle timer)
 	}
 }
 
-// The meat of the spawning logic. Any error happening in here WILL cause bots to spawn!
 static MRESReturn DHookCallback_CTFBotSpawner_Spawn_Pre(CTFBotSpawner spawner, DHookReturn ret, DHookParam params)
 {
+	CTFPlayer newBot = CTFPlayer(-1);
+	
 	float rawHere[3];
 	params.GetVector(1, rawHere);
 	
@@ -433,12 +434,25 @@ static MRESReturn DHookCallback_CTFBotSpawner_Spawn_Pre(CTFBotSpawner spawner, D
 	}
 	
 	// find dead bot we can re-use
-	CTFPlayer newBot = CTFPlayer(FindNextInvader(spawner.m_defaultAttributes.m_attributeFlags & MINIBOSS));
+	ArrayList queue = GetInvaderQueue(spawner.m_defaultAttributes.m_attributeFlags & MINIBOSS);
+	for (int i = 0; i < queue.Length; i++)
+	{
+		if (!CTFPlayer(queue.Get(i)).IsInvader())
+			continue;
+		
+		// reuse this guy
+		newBot = CTFPlayer(queue.Get(i));
+		newBot.ClearAllAttributes();
+		break;
+	}
+	
+	if (!newBot.IsValid())
+	{
+		return MRES_Ignored;
+	}
 	
 	if (newBot.IsValid())
 	{
-		newBot.ClearAllAttributes();
-		
 		// remove any player attributes
 		TF2Attrib_RemoveAll(newBot.index);
 		
@@ -1153,7 +1167,7 @@ static MRESReturn DHookCallback_CTFGameRules_GetTeamAssignmentOverride_Pre(DHook
 	int player = params.Get(1);
 	TFTeam nDesiredTeam = params.Get(2);
 	
-	if (IsClientSourceTV(player))
+	if (IsFakeClient(player))
 		return MRES_Ignored;
 	
 	// allow this function to set each player's team and currency
@@ -1232,6 +1246,9 @@ static MRESReturn DHookCallback_CTFGameRules_GetTeamAssignmentOverride_Post(DHoo
 
 static MRESReturn DHookCallback_CTFPlayer_GetLoadoutItem_Pre(int player, DHookReturn ret, DHookParam params)
 {
+	if (IsFakeClient(player))
+		return MRES_Ignored;
+	
 	if (IsClientInGame(player) && TF2_GetClientTeam(player) == TFTeam_Invaders)
 	{
 		// generate base items for robot players
@@ -1243,6 +1260,9 @@ static MRESReturn DHookCallback_CTFPlayer_GetLoadoutItem_Pre(int player, DHookRe
 
 static MRESReturn DHookCallback_CTFPlayer_GetLoadoutItem_Post(int player, DHookReturn ret, DHookParam params)
 {
+	if (IsFakeClient(player))
+		return MRES_Ignored;
+	
 	if (IsClientInGame(player) && TF2_GetClientTeam(player) == TFTeam_Invaders)
 	{
 		GameRules_SetProp("m_bIsInTraining", false);
@@ -1253,12 +1273,18 @@ static MRESReturn DHookCallback_CTFPlayer_GetLoadoutItem_Post(int player, DHookR
 
 static MRESReturn DHookCallback_CTFPlayer_CheckInstantLoadoutRespawn_Pre(int player)
 {
+	if (IsFakeClient(player))
+		return MRES_Ignored;
+	
 	// never allow invaders to respawn with a new loadout, this breaks spawners
 	return TF2_GetClientTeam(player) == TFTeam_Invaders ? MRES_Supercede : MRES_Ignored;
 }
 
 static MRESReturn DHookCallback_CTFPlayer_DoClassSpecialSkill_Pre(int player, DHookReturn ret)
 {
+	if (IsFakeClient(player))
+		return MRES_Ignored;
+	
 	if (TF2_GetPlayerClass(player) == TFClass_DemoMan && GetEntProp(player, Prop_Send, "m_bShieldEquipped"))
 	{
 		float velocity[3];
@@ -1276,12 +1302,18 @@ static MRESReturn DHookCallback_CTFPlayer_DoClassSpecialSkill_Pre(int player, DH
 
 static MRESReturn DHookCallback_CTFPlayer_RemoveAllOwnedEntitiesFromWorld_Pre(int player, DHookParam params)
 {
+	if (IsFakeClient(player))
+		return MRES_Ignored;
+	
 	// keep this bot's buildings
 	return CTFPlayer(player).HasAttribute(RETAIN_BUILDINGS) ? MRES_Supercede : MRES_Ignored;
 }
 
 static MRESReturn DHookCallback_CTFPlayer_CanBuild_Pre(int player, DHookReturn ret, DHookParam params)
 {
+	if (IsFakeClient(player))
+		return MRES_Ignored;
+	
 	if (TF2_GetClientTeam(player) == TFTeam_Invaders && TF2_GetPlayerClass(player) == TFClass_Engineer)
 	{
 		// prevent invaders from building multiple sentries
@@ -1293,6 +1325,9 @@ static MRESReturn DHookCallback_CTFPlayer_CanBuild_Pre(int player, DHookReturn r
 
 static MRESReturn DHookCallback_CTFPlayer_CanBuild_Post(int player, DHookReturn ret, DHookParam params)
 {
+	if (IsFakeClient(player))
+		return MRES_Ignored;
+	
 	if (TF2_GetClientTeam(player) == TFTeam_Invaders && TF2_GetPlayerClass(player) == TFClass_Engineer)
 	{
 		CBaseEntity(player).AddFlag(FL_FAKECLIENT);
@@ -1530,6 +1565,7 @@ static MRESReturn DHookCallback_DoTeleporterOverride_Post(DHookReturn ret, DHook
 static MRESReturn DHookCallback_OnBotTeleported_Pre(DHookParam params)
 {
 	// This crashes our server in local testing due to s_lastTeleporter being null
+	OnBotTeleported(params.Get(1));
 	return MRES_Supercede;
 }
 
@@ -1711,6 +1747,9 @@ static MRESReturn DHookCallback_CTFPlayer_IsAllowedToPickUpFlag_Post(int player,
 
 static MRESReturn DHookCallback_CTFPlayer_EntSelectSpawnPoint_Pre(int player, DHookReturn ret)
 {
+	if (IsFakeClient(player))
+		return MRES_Ignored;
+	
 	// override normal spawn behavior to spawn robots at the right place
 	if (IsValidEntity(CTFPlayer(player).m_spawnPointEntity))
 	{

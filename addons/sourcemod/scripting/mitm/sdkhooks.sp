@@ -41,6 +41,9 @@ void SDKHooks_OnEntityCreated(int entity, const char[] classname)
 
 static Action SDKHookCB_Client_OnTakeDamageAlive(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom)
 {
+	if (IsFakeClient(victim))
+		return Plugin_Continue;
+	
 	if (TF2_GetClientTeam(victim) == TFTeam_Invaders)
 	{
 		// Don't let Sentry Busters die until they've done their spin-up

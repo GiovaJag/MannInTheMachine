@@ -30,6 +30,8 @@ void Events_Init()
 	HookEvent("teamplay_point_captured", EventHook_TeamplayPointCaptured);
 	HookEvent("teamplay_flag_event", EventHook_TeamplayFlagEvent);
 	HookEvent("teams_changed", EventHook_TeamsChanged);
+	HookEvent("mvm_mission_update", EventHook_MvMMissionUpdate);
+	HookEvent("mvm_begin_wave", EventHook_MvMBeginWave);
 }
 
 static void EventHook_PlayerSpawn(Event event, const char[] name, bool dontBroadcast)
@@ -55,11 +57,13 @@ static void EventHook_PlayerDeath(Event event, const char[] name, bool dontBroad
 
 static Action EventHook_PlayerTeam(Event event, const char[] name, bool dontBroadcast)
 {
-	int client = GetClientOfUserId(event.GetInt("userid"));
+	int userid = event.GetInt("userid");
+	int client = GetClientOfUserId(userid);
 	if (client == 0)
 		return Plugin_Continue;
 	
 	TFTeam team = view_as<TFTeam>(event.GetInt("team"));
+	TFTeam oldteam = view_as<TFTeam>(event.GetInt("oldteam"));
 	
 	// Only show when a new defender joins
 	bool bSilent = team != TFTeam_Defenders;
@@ -71,6 +75,11 @@ static Action EventHook_PlayerTeam(Event event, const char[] name, bool dontBroa
 		TF2Attrib_RemoveAll(client);
 		// Clear Sound
 		CTFPlayer(client).StopIdleSound();
+		
+		if (IsFakeClient(client) && oldteam == TFTeam_Invaders && team == TFTeam_Spectator)
+		{
+			ServerCommand("kickid %d", userid);
+		}
 	}
 	
 	if (team != TFTeam_Invaders)

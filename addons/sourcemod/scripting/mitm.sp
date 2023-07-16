@@ -325,6 +325,20 @@ public void OnEntityDestroyed(int entity)
 
 public void OnGameFrame()
 {
+	if (g_pObjectiveResource.GetMannVsMachineIsBetweenWaves())
+	{
+		for (int client = 1; client <= MaxClients; client++)
+		{
+			if (!IsClientInGame(client))
+				continue;
+			
+			if (IsFakeClient(client) && !IsClientSourceTV(client))
+			{
+				KickClient(client);
+			}
+		}
+	}
+	
 	static ArrayList s_prevQueue;
 	
 	ArrayList queue = GetInvaderQueue();
